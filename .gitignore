@@ -1,0 +1,23 @@
+# Only the rig's scripts and genre presets are tracked; the rest of the User
+# Library (samples, clips, other presets) stays local.
+/*
+!/.gitignore
+!/README.md
+!/install.command
+
+!/Remote Scripts/
+/Remote Scripts/*
+!/Remote Scripts/LoopPad/
+!/Remote Scripts/LoopKeys/
+!/Remote Scripts/LoopPitch/
+!/Remote Scripts/PartyPad/
+
+!/Presets/
+/Presets/**/*.*
+!/Presets/**/[1-4]-*.adg
+!/Presets/**/[1-4]-*.adv
+
+__pycache__/
+*.pyc
+.DS_Store
+/Remote Scripts/LoopPad/simpler.txt
