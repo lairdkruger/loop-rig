@@ -35,7 +35,7 @@ Needs Live **12.1 or newer** (Auto Shift).
 round:  GENRE1 GENRE2 GENRE3 GENRE4  SONG▶■   MIC IN  TUNE   BUILD(hold)
 row 8   A#     ·      C#     D#      ·        F#      G#     ·          CHOP REC (hold + pad)
 row 7   A      B      C      D       E        F       G      MAJ/MIN    CHOP CLEAR (hold + pad)
-row 6   CLEAN  AUTO   TRAP   CHIPMNK MONSTER  ROBOT   RADIO  BIG VERB   TAP TEMPO
+row 6   CLEAN  AUTO   TRAVIS CHIPMNK MONSTER  ROBOT   RADIO  BIG VERB   TAP TEMPO
 row 5   STUT¼  STUT⅛  ECHO   LPF     HPF      WASH    DROP   RESET      TEMPO +1
 rows 1-4  [ 4x4 drums: genre kit ]  [ 4x4 vocal chops ]                 TEMPO -1 / SONG TEMPO
 ```

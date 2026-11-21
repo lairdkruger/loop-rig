@@ -9,7 +9,7 @@ numbering: right column = col 9, top row = row 9).
   row 9   GENRE 1  GENRE 2 GENRE 3 GENRE 4  SONG     MIC IN  TUNE   BUILD (hold 2s)
   row 8   A#       .      C#     D#      .        F#      G#     .         CHOP REC (hold + pad)
   row 7   A        B      C      D       E        F       G      MAJ/MIN   CHOP CLEAR (hold + pad)
-  row 6   CLEAN    AUTO   TRAP   CHIPMNK MONSTER  ROBOT   RADIO  BIG VERB  TAP TEMPO
+  row 6   CLEAN    AUTO   TRAVIS  CHIPMNK MONSTER  ROBOT   RADIO  BIG VERB  TAP TEMPO
   row 5   STUT 1/4 STUT 1/8 ECHO LPF     HPF      WASH    DROP   RESET     TEMPO +1
   row 4   drum     drum   drum   drum    chop     chop    chop   chop      TEMPO -1
   row 3   drum     drum   drum   drum    chop     chop    chop   chop      SONG TEMPO
@@ -144,7 +144,9 @@ KEY_TUNE = "partypad_tune"
 class PartyPad(ControlSurface):
 
     def __init__(self, c_instance):
-        ControlSurface.__init__(self, c_instance)
+        # Set up state before ControlSurface.__init__: Live can build the MIDI
+        # map (which reads it) while that runs, and an error there leaves
+        # every button silently unmapped
         self._tick = 0
         self._pressed = {}
         self._hold_fired = set()
@@ -158,9 +160,11 @@ class PartyPad(ControlSurface):
         self._song_clips = None       # file paths in the Song track, to spot new ones
         self._song_tempo_due = None
         self._genre_retries = 0
+        ControlSurface.__init__(self, c_instance)
         self.log_message("PartyPad: init")
         self._enter_programmer_mode()
         self._rescan()
+        self.request_rebuild_midi_map()
         self._refresh_leds(force=True)
         self.show_message("PartyPad ready - hold the top-right button to build the set")
 
@@ -195,11 +199,14 @@ class PartyPad(ControlSurface):
         return [n for n in CHOP_PADS if n not in self._full_chops]
 
     def build_midi_map(self, midi_map_handle):
-        handle = self._c_instance.handle()
-        for note in TOP_NOTES + self._forwarded_chops():
-            Live.MidiMap.forward_midi_note(handle, midi_map_handle, 0, note)
-        for button in CC_BUTTONS:
-            Live.MidiMap.forward_midi_cc(handle, midi_map_handle, 0, button)
+        try:
+            handle = self._c_instance.handle()
+            for note in TOP_NOTES + self._forwarded_chops():
+                Live.MidiMap.forward_midi_note(handle, midi_map_handle, 0, note)
+            for button in CC_BUTTONS:
+                Live.MidiMap.forward_midi_cc(handle, midi_map_handle, 0, button)
+        except Exception as e:
+            self.log_message("PartyPad: MIDI map error: %r" % (e,))
 
     def receive_midi(self, midi_bytes):
         if len(midi_bytes) != 3:
@@ -337,6 +344,8 @@ class PartyPad(ControlSurface):
             song.tempo = max(20.0, round(song.tempo) - 1)
         elif note == BTN_SONG_TEMPO:
             self._tempo_from_song()
+        elif note == BTN_BUILD:
+            self.show_message("PartyPad: keep holding to build the set...")
 
     def _on_release(self, note, held, hold_fired):
         if note in DJ_PADS:
@@ -359,6 +368,7 @@ class PartyPad(ControlSurface):
             held = self._tick - since
             if note == BTN_BUILD and held >= BUILD_HOLD_TICKS:
                 self._hold_fired.add(note)
+                self._log("BUILD held: building the set")
                 self._build_set()
             elif note == BTN_CHOP_CLEAR and held >= CLEAR_ALL_HOLD_TICKS:
                 if not any(n in self._pressed for n in CHOP_PADS):
@@ -384,10 +394,12 @@ class PartyPad(ControlSurface):
             song.scale_name = scale
         except Exception as e:
             self._log("couldn't set the song's scale: %r" % (e,))
-        tune = self._device(self._find_track(MIC_TRACK), "Tune")
-        if tune is not None:
-            choose_option(tune, "Root", [NOTE_NAMES[root], FLAT_NAMES[root]], self._log)
-            choose_option(tune, "Scale", [scale], self._log)
+        mic = self._find_track(MIC_TRACK)
+        for name in styles.TUNERS:
+            tune = self._device(mic, name)
+            if tune is not None:
+                choose_option(tune, "Root", [NOTE_NAMES[root], FLAT_NAMES[root]], self._log)
+                choose_option(tune, "Scale", [scale], self._log)
         self.show_message("PartyPad: key %s %s" % (NOTE_NAMES[root], scale.lower()))
 
     # ------------------------------------------------------------- styles ---
@@ -404,7 +416,8 @@ class PartyPad(ControlSurface):
         if mic is None:
             return
         _, _, settings = styles.STYLES[self._style()]
-        for name, _, _ in styles.VOCAL_CHAIN:
+        self._ensure_low_oct(mic, "Low Oct" in settings)
+        for name, _, _ in styles.VOCAL_CHAIN + [styles.LOW_OCT]:
             device = self._device(mic, name)
             if device is None:
                 continue
@@ -413,17 +426,40 @@ class PartyPad(ControlSurface):
             else:
                 on = name in styles.ALWAYS_ON or name in settings
             mix.set_enabled(device, on)
-            if name in settings:
-                mix.set_params(device, settings[name], self._log)
+            # Back to the defaults first, so one style's tweaks don't linger in the next
+            self._set_params(device, styles.STYLE_DEFAULTS.get(name, []))
+            self._set_params(device, settings.get(name, []))
         verb = self._device(mic, "Verb")
-        if verb is not None:
-            if self.song().get_data(KEY_BIG_VERB, False):
-                mix.set_params(verb, styles.BIG_VERB, self._log)
+        if verb is not None and self.song().get_data(KEY_BIG_VERB, False):
+            self._set_params(verb, styles.BIG_VERB)
+
+    def _ensure_low_oct(self, mic, wanted):
+        name, device_name, params = styles.LOW_OCT
+        device = self._device(mic, name)
+        if not wanted:
+            if device is not None:
+                mic.delete_device(list(mic.devices).index(device))
+            return
+        if device is not None:
+            return
+        tune = self._device(mic, "Tune")
+        index = list(mic.devices).index(tune) + 1 if tune is not None else 0
+        device = mix.insert(mic, device_name, index, self._log)
+        if device is None:
+            return
+        device.name = name
+        mix.set_params(device, params, self._log)
+        root = self._root()
+        choose_option(device, "Root", [NOTE_NAMES[root], FLAT_NAMES[root]], self._log)
+        choose_option(device, "Scale", ["Minor" if self._minor() else "Major"], self._log)
+
+    def _set_params(self, device, params):
+        """mix.set_params, plus ("16ths", n) for a synced Delay's time."""
+        for name, value in params:
+            if name == "16ths":
+                set_sixteenths(device, value, self._log)
             else:
-                mix.set_param(verb, "Decay Time", styles.NORMAL_VERB_DECAY, self._log)
-        echo = self._device(mic, "Echo")
-        if echo is not None:
-            set_sixteenths(echo, styles.ECHO_SIXTEENTHS, self._log)
+                mix.set_param(device, name, value, self._log)
 
     # --------------------------------------------------------- DJ effects ---
 
@@ -784,9 +820,10 @@ class PartyPad(ControlSurface):
                   (PADS_TRACK, "midi"), (CHOPS_TRACK, "midi")]
         missing = [(name, kind) for name, kind in wanted if self._find_track(name) is None]
         if len(song.tracks) + len(missing) > MAX_TRACKS:
-            self.show_message("PartyPad: needs %d more tracks but Lite allows %d - delete %d "
-                              "track(s) first" % (len(missing), MAX_TRACKS,
-                                                  len(song.tracks) + len(missing) - MAX_TRACKS))
+            self.show_message("PartyPad: needs %d new tracks (%s) but this set has %d of Lite's "
+                              "%d - delete %d track(s), or use File > New Live Set" % (
+                                  len(missing), ", ".join(n for n, _ in missing), len(song.tracks),
+                                  MAX_TRACKS, len(song.tracks) + len(missing) - MAX_TRACKS))
             return
         try:
             for name, kind in missing:
@@ -814,7 +851,7 @@ class PartyPad(ControlSurface):
             self._ensure_chain(mic, styles.VOCAL_CHAIN)
 
             rec = self._find_track(CHOP_REC_TRACK)
-            route_input(rec, MIC_TRACK, "Post FX", log)
+            route_input(rec, MIC_TRACK, "Post FX", log, track_only=True)
             rec.current_monitoring_state = MONITOR_OFF
             rec.mixer_device.volume.value = rec.mixer_device.volume.min
             rec.arm = True
@@ -942,13 +979,21 @@ class PartyPad(ControlSurface):
 
 # ---------------------------------------------------------------- helpers ---
 
-def route_input(track, type_contains, channel_name, log):
+def route_input(track, type_contains, channel_name, log, track_only=False):
     """Set a track's input by name (an exact match first, then a partial one)."""
     if track is None:
         return
     try:
         types = list(track.available_input_routing_types)
-        match = next((rt for rt in types if rt.display_name.lower() == type_contains.lower()), None)
+        # Tracks are listed numbered ("2-Mic"), so match the name after the number too
+        wanted = type_contains.lower()
+        match = next((rt for rt in types
+                      if rt.display_name.lower() == wanted
+                      or rt.display_name.lower().split("-", 1)[-1] == wanted), None)
+        if match is None and track_only:
+            log("no track %r to take %s's input from; options: %r" % (
+                type_contains, track.name, [r.display_name for r in types]))
+            return
         if match is None:
             match = next((rt for rt in types
                           if type_contains.lower() in rt.display_name.lower()), None)

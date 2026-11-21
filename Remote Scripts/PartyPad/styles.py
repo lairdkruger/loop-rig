@@ -31,8 +31,24 @@ VOCAL_CHAIN = [
 # Always on, whatever the style (Tune is switched by the TUNE button instead)
 ALWAYS_ON = ("Vox Comp", "Verb", "Vox Limit")
 
-# Delay division, in 16th notes, for each Echo (and DJ effect) that syncs
-ECHO_SIXTEENTHS = 2  # 1/8
+# Second Auto Shift, straight after Tune, for styles that list it (TRAVIS):
+# blends in an octave-down copy of the tuned voice. It's only on the track
+# while such a style is on, as even a switched-off Auto Shift delays the vocal.
+LOW_OCT = ("Low Oct", "Auto Shift", [("Quantizer On", True), ("Scale Aware", False),
+                                     ("Latch", False), ("Strength", 100.0), ("Smooth On", False),
+                                     ("Pitch St.", -12.0), ("Formant Follow", True),
+                                     ("Dry/Wet", 30.0)])
+
+# The Auto Shifts the key pads set
+TUNERS = ("Tune", "Low Oct")
+
+# Every style starts from these, then sets its own. ("16ths", n) sets a
+# synced Delay's time in 16th notes.
+STYLE_DEFAULTS = {
+    "Verb": [("Decay Time", 1800.0), ("Diff. Hi On", False)],
+    "Echo": [("16ths", 2), ("Feedback", 25.0)],  # 1/8
+    "Double": [("Width", 100.0)],
+}
 
 HARD_TUNE = [("Strength", 100.0), ("Smooth On", False), ("Pitch St.", 0.0)]
 
@@ -46,12 +62,16 @@ STYLES = [
     ("Auto-Tune", 21, {  # hard, robotic snap between notes (T-Pain)
         "Tune": HARD_TUNE,
         "Verb": [("Dry/Wet", 15.0)]}),
-    ("Trap", 9, {  # hard tune, doubled, driven, with an 1/8 echo
-        "Tune": HARD_TUNE,
-        "Double": [("Mode", "Ensemble"), ("Dry/Wet", 40.0)],
-        "Grit": [("Drive", 6.0), ("Output", -4.0)],
-        "Echo": [("Feedback", 25.0), ("Dry/Wet", 18.0)],
-        "Verb": [("Dry/Wet", 20.0)]}),
+    ("Travis", 9, {  # Travis Scott: hard tune with an octave-down layer, wide double,
+        # some drive, a long 1/4 echo and a big dark reverb
+        "Tune": [("Strength", 100.0), ("Smooth On", True), ("Smooth Time", 20.0),
+                 ("Pitch St.", 0.0)],
+        "Low Oct": [("Dry/Wet", 30.0)],
+        "Double": [("Mode", "Ensemble"), ("Width", 150.0), ("Dry/Wet", 45.0)],
+        "Grit": [("Drive", 8.0), ("Output", -5.0)],
+        "Echo": [("16ths", 4), ("Feedback", 45.0), ("Dry/Wet", 22.0)],
+        "Verb": [("Decay Time", 3500.0), ("Diff. Hi On", True), ("Diff. Hi Freq", 2500.0),
+                 ("Dry/Wet", 30.0)]}),
     ("Chipmunk", 13, {  # octave up, formants follow (that's the chipmunk)
         "Tune": [("Strength", 80.0), ("Smooth On", False), ("Pitch St.", 12.0),
                  ("Formant Follow", True)],
@@ -76,7 +96,6 @@ STYLES = [
 
 # BIG VERB (row 6, col 8): laid over whichever style is on
 BIG_VERB = [("Decay Time", 4500.0), ("Dry/Wet", 40.0)]
-NORMAL_VERB_DECAY = 1800.0
 
 # ------------------------------------------------------------- DJ effects ---
 
