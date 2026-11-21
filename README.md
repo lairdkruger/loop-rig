@@ -9,9 +9,9 @@ This repo *is* an Ableton User Library. Only the scripts and the genre presets (
 
 ## Setting up on another Mac
 
-1. Get the code (no git? use **Code > Download ZIP** on GitHub and unzip it):
+1. Get the code (the repo is private: log in with `gh auth login` first, or download the ZIP from GitHub while logged in):
    ```
-   git clone https://github.com/<you>/loop-rig.git ~/loop-rig
+   git clone https://github.com/lairdkruger/loop-rig.git ~/loop-rig
    ```
 2. Double-click `install.command` (or run `~/loop-rig/install.command`). It copies the scripts and presets into `~/Music/Ableton/User Library`. If Live's User Library is somewhere else (Settings > Library), pass that path instead: `./install.command "/path/to/User Library"`.
 3. Plug in the Launchpad X. In Live: **Settings > Link, Tempo & MIDI**:
