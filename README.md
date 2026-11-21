@@ -9,7 +9,7 @@ This repo *is* an Ableton User Library. Only the scripts and the genre presets (
 
 ## Setting up on another Mac
 
-1. Get the code (the repo is private: log in with `gh auth login` first, or download the ZIP from GitHub while logged in):
+1. Get the code (no git? use **Code > Download ZIP** on GitHub and unzip it):
    ```
    git clone https://github.com/lairdkruger/loop-rig.git ~/loop-rig
    ```
